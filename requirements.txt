@@ -1,0 +1,17 @@
+# Core data and notebook stack
+datasets>=4.0,<5
+huggingface-hub>=0.30,<2
+pandas>=2.2,<3
+numpy>=2.0,<3
+pyarrow>=18,<24
+tqdm>=4.66,<5
+
+# Core modelling/evaluation stack (used in later notebooks)
+scikit-learn>=1.5,<2
+scipy>=1.14,<2
+statsmodels>=0.14,<1
+matplotlib>=3.9,<4
+
+# Local notebook environment
+jupyterlab>=4.3,<5
+ipykernel>=6.29,<8

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.ipynb_checkpoints/
+
+# Hugging Face credentials/cache
+.huggingface/
+.cache/
+
+# Dataset content: LMSYS licence does not permit redistribution.
+data/raw/*
+data/processed/*
+data/samples/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/samples/.gitkeep
+
+# Local experiment logs can contain machine-specific metadata.
+logs/*
+!logs/.gitkeep
