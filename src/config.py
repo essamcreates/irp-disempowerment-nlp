@@ -18,11 +18,26 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 DATASET_ID = "lmsys/lmsys-chat-1m"
 DATASET_SPLIT = "train"
 
-# Use "main" for initial exploration.
-# Once the pipeline is stable, pin this to a specific dataset revision/commit.
-DATASET_REVISION = "main"
+# Pin the dataset to the exact Hugging Face revision used for the experiments.
+# This prevents later changes to the repository from altering the input data.
+DATASET_REVISION = "200748d9d3cddcc9d782887541057aca0b18c5da"
 
 RANDOM_SEED = 42
+
+# Frozen relevance-filter version.
+# Increment this if the filtering rules are changed in future.
+FILTER_VERSION = "relevance_v1"
+
+# Filtering and pilot sampling
+PILOT_SCAN_LIMIT = 5000
+PILOT_SAMPLE_SIZE = 100
+
+# Basic text quality thresholds.
+MIN_USER_CHARS = 20
+MIN_ASSISTANT_CHARS = 20
+MAX_USER_CHARS = 5000
+MAX_ASSISTANT_CHARS = 10000
+
 
 # Keep the first inspection intentionally small.
 INSPECTION_SAMPLE_SIZE = 25
