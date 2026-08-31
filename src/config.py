@@ -29,7 +29,7 @@ RANDOM_SEED = 42
 FILTER_VERSION = "relevance_v1"
 
 # Filtering and pilot sampling
-PILOT_SCAN_LIMIT = 5000
+PILOT_SCAN_LIMIT = 150000
 PILOT_SAMPLE_SIZE = 100
 
 # Basic text quality thresholds.
