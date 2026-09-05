@@ -1,0 +1,7 @@
+source_index,pair_index,fold,baseline_score,worst_score_delta,worst_noise,worst_preprocess,best_score_delta,best_noise,best_preprocess,mean_absolute_delta
+31276,0,0,-0.2541,-0.3248,whitespace,aggressive,0.0124,word_deletion,none,0.0828
+135823,0,1,-0.5121,-0.2638,typo,aggressive,0.0131,whitespace,none,0.0705
+79032,0,2,-0.5389,-0.2485,clean,aggressive,0.0139,filler,none,0.0705
+138363,2,0,-0.7188,-0.1073,word_deletion,aggressive,0.0059,typo,none,0.0333
+43461,4,2,-0.723,-0.0749,clean,aggressive,0.0177,whitespace,none,0.0214
+58105,0,1,-0.6805,-0.0391,typo,aggressive,0.0234,mixed,none,0.0132
