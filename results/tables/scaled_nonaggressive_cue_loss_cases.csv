@@ -1,0 +1,9 @@
+source_index,pair_index,noise_condition,preprocess_config,original_cues,retained_cues
+788930,0,mixed,none,you_should,
+788930,0,mixed,minimal,you_should,
+819967,2,mixed,none,you_should,
+819967,2,mixed,minimal,you_should,
+819967,2,mixed,noise_aware,you_should,
+927678,0,mixed,none,you_must,
+927678,0,mixed,minimal,you_must,
+927678,0,mixed,noise_aware,you_must,
