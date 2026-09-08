@@ -1,0 +1,58 @@
+name: Clean-room reproduction
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install locked environment
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-lock.txt
+          python -m pip check
+
+      - name: Check Hugging Face token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "Repository secret HF_TOKEN is not configured."
+            echo "Add a Hugging Face read token with access to lmsys/lmsys-chat-1m, then rerun this workflow."
+            exit 1
+          fi
+
+      - name: Provide Codespaces-compatible absolute path
+        run: |
+          sudo mkdir -p /workspaces
+          sudo ln -sfn "$GITHUB_WORKSPACE" /workspaces/irp-disempowerment-nlp
+
+      - name: Run clean-room notebooks 01-07
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python scripts/run_cleanroom.py
+
+      - name: Upload executed notebook copies on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleanroom-failure-notebooks
+          path: .cleanroom_runs/
+          if-no-files-found: ignore
+          retention-days: 3
