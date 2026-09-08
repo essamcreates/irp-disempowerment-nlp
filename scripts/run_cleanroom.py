@@ -78,8 +78,8 @@ def prepare_notebook02(notebook) -> int:
     runner therefore preserves the path-definition part of the notebook's initial
     audit-export cell but removes only the write operation that would overwrite the
     completed audit with blank annotation columns. Historical interactive audit calls
-    before the recovery checkpoint are also skipped. Filtering, sampling, recovery,
-    and all frozen experimental logic remain unchanged.
+    are skipped when committed audit provenance is available. Filtering, sampling,
+    recovery, and all frozen experimental logic remain unchanged.
     """
     recovery_index = None
     for index, cell in enumerate(notebook.cells):
@@ -102,7 +102,7 @@ def prepare_notebook02(notebook) -> int:
     skipped = 0
 
     for index, cell in enumerate(notebook.cells):
-        if index >= recovery_index or cell.get("cell_type") != "code":
+        if cell.get("cell_type") != "code":
             kept.append(cell)
             continue
 
@@ -129,16 +129,26 @@ def prepare_notebook02(notebook) -> int:
             skipped += 1
             continue
 
-        # Keep helper definitions; skip only calls that historically required a
-        # human-in-the-loop decision before the notebook's own recovery checkpoint.
+        # Keep helper definitions, but do not replay any historical interactive
+        # manual-audit calls when the completed committed audit is available.
         is_definition = (
             "def show_next_unreviewed" in source
             or "def label_validation_example" in source
             or "def show_validation_example" in source
         )
         is_interactive_call = any(marker in source for marker in NOTEBOOK02_INTERACTIVE_CALLS)
+        if use_committed_audit and is_interactive_call and not is_definition:
+            skipped += 1
+            continue
 
-        if is_interactive_call and not is_definition:
+        # Without committed audit provenance, preserve the original fallback
+        # behaviour: skip only pre-recovery interactive calls.
+        if (
+            not use_committed_audit
+            and index < recovery_index
+            and is_interactive_call
+            and not is_definition
+        ):
             skipped += 1
             continue
 
