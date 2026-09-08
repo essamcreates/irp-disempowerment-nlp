@@ -74,8 +74,30 @@ def read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def count_csv_rows(path: Path) -> int:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return max(sum(1 for _ in handle) - 1, 0)
+    """Count logical CSV records, including files with embedded newlines."""
+    return len(read_csv(path))
+
+
+def parse_binary(value: Any) -> int:
+    """Parse common CSV encodings of boolean/binary values as 0 or 1."""
+    text = str(value).strip().lower()
+
+    if text in {"1", "1.0", "true", "t", "yes"}:
+        return 1
+    if text in {"0", "0.0", "false", "f", "no", ""}:
+        return 0
+
+    try:
+        numeric = float(text)
+    except ValueError as exc:
+        raise ValueError(f"Could not parse binary value: {value!r}") from exc
+
+    if numeric == 1.0:
+        return 1
+    if numeric == 0.0:
+        return 0
+
+    raise ValueError(f"Expected binary value, got: {value!r}")
 
 
 def float_close(actual: Any, expected: float, tolerance: float = 5e-4) -> bool:
@@ -334,12 +356,12 @@ def verify_full_intermediates(checks: CheckRunner) -> None:
 
     validation = read_csv(expected_paths["validation"])
     checks.check("Manual relevance validation has 200 rows", len(validation) == 200)
-    manual_values = [row.get("manual_relevant", "").strip() for row in validation]
+    manual_values = [parse_binary(row.get("manual_relevant", "")) for row in validation]
     checks.check(
         "Manual relevance decisions are complete",
-        all(value in {"0", "1", "0.0", "1.0"} for value in manual_values),
+        len(manual_values) == len(validation),
     )
-    relevant = sum(value in {"1", "1.0"} for value in manual_values)
+    relevant = sum(manual_values)
     checks.check("Manual relevance positives = 108", relevant == 108)
     checks.check("Manual relevance negatives = 92", len(validation) - relevant == 92)
 
@@ -352,8 +374,7 @@ def verify_full_intermediates(checks: CheckRunner) -> None:
     checks.check("Weak-labelled pilot has 100 rows", len(labelled_pilot) == 100)
     if labelled_pilot:
         pilot_positive_count = sum(
-            str(row.get("weak_label_any", "")).strip().lower()
-            in {"1", "1.0", "true"}
+            parse_binary(row.get("weak_label_any", "0"))
             for row in labelled_pilot
         )
         checks.check("Weak-labelled pilot positives = 6", pilot_positive_count == 6)
@@ -367,7 +388,7 @@ def verify_full_intermediates(checks: CheckRunner) -> None:
     checks.check("Positive audit has 56 rows", len(positive_audit) == 56)
     if positive_audit:
         valid = sum(
-            float(row.get("manual_audit_valid", "nan")) == 1.0
+            parse_binary(row.get("manual_audit_valid", "0"))
             for row in positive_audit
         )
         checks.check("Positive audit valid detections = 16", valid == 16)
@@ -377,7 +398,7 @@ def verify_full_intermediates(checks: CheckRunner) -> None:
     checks.check("Negative audit has 100 rows", len(negative_audit) == 100)
     if negative_audit:
         missed = sum(
-            float(row.get("manual_missed_positive", "nan")) == 1.0
+            parse_binary(row.get("manual_missed_positive", "0"))
             for row in negative_audit
         )
         checks.check("Negative audit missed positives = 1", missed == 1)
@@ -386,14 +407,29 @@ def verify_full_intermediates(checks: CheckRunner) -> None:
     checks.check("Audit-corrected target has 1,633 rows", len(target) == 1633)
     if target:
         sources = {row["source_index"] for row in target}
-        positives = sum(int(float(row["target_label"])) for row in target)
-        syc = sum(int(float(row["target_sycophantic_validation"])) for row in target)
-        over = sum(int(float(row["target_overconfident_judgement"])) for row in target)
-        directive = sum(int(float(row["target_directive_advice"])) for row in target)
+        positives = sum(parse_binary(row["target_label"]) for row in target)
+        syc = sum(
+            parse_binary(row["target_sycophantic_validation"])
+            for row in target
+        )
+        over = sum(
+            parse_binary(row["target_overconfident_judgement"])
+            for row in target
+        )
+        directive = sum(
+            parse_binary(row["target_directive_advice"])
+            for row in target
+        )
 
-        checks.check("Audit-corrected target has 1,633 unique sources", len(sources) == 1633)
+        checks.check(
+            "Audit-corrected target has 1,633 unique sources",
+            len(sources) == 1633,
+        )
         checks.check("Audit-corrected target positives = 17", positives == 17)
-        checks.check("Audit-corrected target negatives = 1,616", len(target) - positives == 1616)
+        checks.check(
+            "Audit-corrected target negatives = 1,616",
+            len(target) - positives == 1616,
+        )
         checks.check(
             "Corrected category totals are sycophantic=0, overconfident=1, directive=16",
             (syc, over, directive) == (0, 1, 16),
@@ -407,10 +443,19 @@ def verify_full_intermediates(checks: CheckRunner) -> None:
             (row["noise_condition"], row["preprocess_config"])
             for row in scaled_matrix
         }
-        positives = sum(int(float(row["target_label"])) for row in scaled_matrix)
-        checks.check("Scaled matrix has 1,633 unique sources", len(sources) == 1633)
+        positives = sum(
+            parse_binary(row["target_label"])
+            for row in scaled_matrix
+        )
+        checks.check(
+            "Scaled matrix has 1,633 unique sources",
+            len(sources) == 1633,
+        )
         checks.check("Scaled matrix has 32 conditions", len(conditions) == 32)
-        checks.check("Scaled matrix has 544 positive-condition rows", positives == 544)
+        checks.check(
+            "Scaled matrix has 544 positive-condition rows",
+            positives == 544,
+        )
 
 
 def main() -> int:
@@ -448,7 +493,11 @@ def main() -> int:
             verify_lock_environment(checks)
             verify_full_intermediates(checks)
     except Exception as exc:
-        checks.check("Verifier completed without unexpected exceptions", False, repr(exc))
+        checks.check(
+            "Verifier completed without unexpected exceptions",
+            False,
+            repr(exc),
+        )
 
     return checks.close()
 
