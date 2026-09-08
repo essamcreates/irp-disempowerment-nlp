@@ -1,6 +1,9 @@
 name: Clean-room reproduction
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
