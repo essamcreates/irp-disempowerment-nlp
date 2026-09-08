@@ -50,6 +50,7 @@ NOTEBOOK02_INTERACTIVE_CALLS = (
     "label_validation_example(",
     "show_validation_example(",
 )
+NOTEBOOK02_MANUAL_AUDIT_FILENAME = "lmsys_relevance_manual_validation_200.csv"
 
 
 def is_environment_mutation_cell(cell: dict) -> bool:
@@ -73,15 +74,11 @@ def prepare_notebook02(notebook) -> int:
     """Prepare Notebook 02 for faithful sequential clean-room execution.
 
     Notebook 02 records an interrupted manual topical-relevance audit. The notebook
-    later reconstructs the successfully saved historical decisions by reading the
-    recorded outputs from the source notebook, then resumes from the first genuinely
-    unreviewed row. Re-executing the earlier interactive labelling cells before that
-    recovery block would create new decisions that were never part of the frozen
-    audit and can change the downstream 100-example pilot.
-
-    For the temporary execution copy only, skip those pre-recovery interactive calls.
-    The data filtering/sampling cells, the recovery code, the explicit missing-row
-    repair, and all subsequent recorded manual decisions still execute unchanged.
+    later reconstructs successfully saved historical decisions from recorded outputs.
+    A complete original audit CSV is now committed as provenance for clean-room use.
+    The temporary runner therefore prevents the notebook's initial blank audit export
+    from overwriting that committed provenance, while leaving filtering, recovery,
+    sampling, and all frozen experimental logic unchanged.
     """
     recovery_index = None
     for index, cell in enumerate(notebook.cells):
@@ -95,6 +92,11 @@ def prepare_notebook02(notebook) -> int:
     if recovery_index is None:
         raise RuntimeError("Notebook 02 historical audit recovery block was not found.")
 
+    manual_audit_path = (
+        PROJECT_ROOT / "data" / "samples" / NOTEBOOK02_MANUAL_AUDIT_FILENAME
+    )
+    use_committed_audit = manual_audit_path.exists()
+
     kept = []
     skipped = 0
 
@@ -104,6 +106,18 @@ def prepare_notebook02(notebook) -> int:
             continue
 
         source = "".join(cell.get("source", []))
+
+        # The notebook originally creates a blank manual-audit CSV before the
+        # human review. In clean-room execution, preserve the committed completed
+        # audit instead of clobbering it with blank annotation columns.
+        is_blank_audit_export = (
+            use_committed_audit
+            and NOTEBOOK02_MANUAL_AUDIT_FILENAME in source
+            and "validation_df.to_csv" in source
+        )
+        if is_blank_audit_export:
+            skipped += 1
+            continue
 
         # Keep helper definitions; skip only calls that historically required a
         # human-in-the-loop decision before the notebook's own recovery checkpoint.
@@ -188,9 +202,8 @@ def execute_notebook(name: str) -> None:
     print("=" * 78)
     if audit_cells_skipped:
         print(
-            f"Skipped {audit_cells_skipped} pre-recovery interactive Notebook 02 "
-            "audit cell(s); the notebook's recorded-output recovery stage will "
-            "reconstruct the frozen manual decisions."
+            f"Skipped {audit_cells_skipped} Notebook 02 clean-room-only audit "
+            "replay cell(s); committed manual-audit provenance is preserved."
         )
     if environment_cells_skipped:
         print(
