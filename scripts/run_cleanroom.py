@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Execute the IRP notebooks in clean-room order inside GitHub Codespaces.
+Execute the IRP notebooks in clean-room order in GitHub Codespaces or Actions.
 
 The original notebooks preserve historical exploratory/environment-repair cells.
 This runner executes temporary copies and skips only cells that mutate the Python
@@ -10,6 +10,7 @@ environment. It never edits the source notebooks.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -60,17 +61,22 @@ def is_environment_mutation_cell(cell: dict) -> bool:
     )
 
 
-def ensure_codespaces_layout() -> None:
-    expected = Path("/workspaces/irp-disempowerment-nlp")
-    if PROJECT_ROOT != expected:
-        raise SystemExit(
-            "\nThis automated clean-room runner supports the documented GitHub "
-            "Codespaces layout only.\n"
-            f"Expected repository root: {expected}\n"
-            f"Current repository root:  {PROJECT_ROOT}\n\n"
-            "For another environment, follow the manual notebook instructions "
-            "in README.md."
-        )
+def ensure_supported_layout() -> None:
+    """Allow the documented Codespaces layout or a GitHub Actions runner."""
+    expected_codespaces_root = Path("/workspaces/irp-disempowerment-nlp")
+    running_in_actions = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+
+    if PROJECT_ROOT == expected_codespaces_root or running_in_actions:
+        return
+
+    raise SystemExit(
+        "\nThis automated clean-room runner supports GitHub Codespaces and "
+        "GitHub Actions.\n"
+        f"Expected Codespaces root: {expected_codespaces_root}\n"
+        f"Current repository root:  {PROJECT_ROOT}\n\n"
+        "For another environment, follow the manual notebook instructions "
+        "in README.md."
+    )
 
 
 def register_kernel() -> None:
@@ -168,7 +174,7 @@ def main() -> int:
     if args.start > args.end:
         parser.error("--start must be less than or equal to --end")
 
-    ensure_codespaces_layout()
+    ensure_supported_layout()
     check_environment()
     register_kernel()
 
