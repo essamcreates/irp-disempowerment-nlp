@@ -47,6 +47,11 @@ ENVIRONMENT_MUTATION_MARKERS = (
 NOTEBOOK02_MANUAL_AUDIT_FILENAME = "lmsys_relevance_manual_validation_200.csv"
 NOTEBOOK02_AUDIT_LOAD_MARKER = "validation_df = pd.read_csv("
 NOTEBOOK02_DOWNSTREAM_MARKER = "validated_relevant_df = validation_df["
+NOTEBOOK02_INTERACTIVE_CALLS = (
+    "show_next_unreviewed()",
+    "label_validation_example(",
+    "show_validation_example(",
+)
 
 
 def is_environment_mutation_cell(cell: dict) -> bool:
@@ -124,6 +129,21 @@ def prepare_notebook02(notebook) -> int:
                 'print("Using committed manual audit:", validation_path)\n'
             )
             kept.append(cell)
+            adjusted += 1
+            continue
+
+        # The committed audit already contains every historical human decision.
+        # Skip any replay of interactive audit calls anywhere in Notebook 02,
+        # including cells that appear after the first downstream checkpoint.
+        is_definition = (
+            "def show_next_unreviewed" in source
+            or "def label_validation_example" in source
+            or "def show_validation_example" in source
+        )
+        is_interactive_call = any(
+            marker in source for marker in NOTEBOOK02_INTERACTIVE_CALLS
+        )
+        if is_interactive_call and not is_definition:
             adjusted += 1
             continue
 
