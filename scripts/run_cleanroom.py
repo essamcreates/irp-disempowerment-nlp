@@ -117,7 +117,8 @@ def inject_notebook02_helpers(notebook) -> int:
 
     helper_source = (
         "# Clean-room execution shim: hoist historical manual-review helpers.\n"
-        "# The source notebook is not modified.\n\n"
+        "# The source notebook is not modified.\n"
+        "from IPython.display import display, Markdown\n\n"
         + "\n\n".join(definitions[name] for name in NOTEBOOK02_HELPERS)
     )
     notebook.cells.insert(first_use_index, nbformat.v4.new_code_cell(helper_source))
