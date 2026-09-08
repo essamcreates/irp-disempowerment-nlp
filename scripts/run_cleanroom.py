@@ -10,6 +10,7 @@ environment. It never edits the source notebooks.
 from __future__ import annotations
 
 import argparse
+import ast
 import os
 import subprocess
 import sys
@@ -43,6 +44,12 @@ ENVIRONMENT_MUTATION_MARKERS = (
     "Restart the Jupyter kernel now",
 )
 
+NOTEBOOK02_HELPERS = (
+    "show_validation_example",
+    "show_next_unreviewed",
+    "label_validation_example",
+)
+
 
 def is_environment_mutation_cell(cell: dict) -> bool:
     if cell.get("cell_type") != "code":
@@ -59,6 +66,62 @@ def is_environment_mutation_cell(cell: dict) -> bool:
         and '"-m"' in source
         and '"pip"' in source
     )
+
+
+def inject_notebook02_helpers(notebook) -> int:
+    """
+    Make Notebook 02 executable top-to-bottom without changing its source file.
+
+    The historical notebook contains manual-review helper functions that were
+    defined later during the interactive annotation session, while earlier cells
+    call those helpers. For a clean-room sequential run, copy just those function
+    definitions into a temporary synthetic cell immediately before their first
+    use. The original notebook remains untouched and its recorded decisions are
+    still executed exactly as stored.
+    """
+    definitions: dict[str, str] = {}
+
+    for cell in notebook.cells:
+        if cell.get("cell_type") != "code":
+            continue
+
+        source = "".join(cell.get("source", []))
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            continue
+
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.name in NOTEBOOK02_HELPERS and node.name not in definitions:
+                    definitions[node.name] = ast.unparse(node)
+
+    missing = [name for name in NOTEBOOK02_HELPERS if name not in definitions]
+    if missing:
+        raise RuntimeError(
+            "Notebook 02 clean-room helper definitions could not be found: "
+            + ", ".join(missing)
+        )
+
+    first_use_index = None
+    for index, cell in enumerate(notebook.cells):
+        if cell.get("cell_type") != "code":
+            continue
+        source = "".join(cell.get("source", []))
+        if "show_next_unreviewed()" in source and "def show_next_unreviewed" not in source:
+            first_use_index = index
+            break
+
+    if first_use_index is None:
+        raise RuntimeError("Notebook 02 first manual-review helper use was not found.")
+
+    helper_source = (
+        "# Clean-room execution shim: hoist historical manual-review helpers.\n"
+        "# The source notebook is not modified.\n\n"
+        + "\n\n".join(definitions[name] for name in NOTEBOOK02_HELPERS)
+    )
+    notebook.cells.insert(first_use_index, nbformat.v4.new_code_cell(helper_source))
+    return 1
 
 
 def ensure_supported_layout() -> None:
@@ -110,6 +173,10 @@ def execute_notebook(name: str) -> None:
     with source_path.open("r", encoding="utf-8") as handle:
         notebook = nbformat.read(handle, as_version=4)
 
+    injected = 0
+    if name == "02_filtering_and_sampling.ipynb":
+        injected = inject_notebook02_helpers(notebook)
+
     original_count = len(notebook.cells)
     notebook.cells = [
         cell for cell in notebook.cells if not is_environment_mutation_cell(cell)
@@ -119,6 +186,11 @@ def execute_notebook(name: str) -> None:
     print("\n" + "=" * 78)
     print(f"Running {name}")
     print("=" * 78)
+    if injected:
+        print(
+            "Inserted a temporary Notebook 02 helper-definition shim for "
+            "top-to-bottom execution."
+        )
     if skipped:
         print(
             f"Skipped {skipped} historical environment-repair cell(s). "
