@@ -73,12 +73,13 @@ def is_environment_mutation_cell(cell: dict) -> bool:
 def prepare_notebook02(notebook) -> int:
     """Prepare Notebook 02 for faithful sequential clean-room execution.
 
-    Notebook 02 records an interrupted manual topical-relevance audit. The notebook
-    later reconstructs successfully saved historical decisions from recorded outputs.
-    A complete original audit CSV is now committed as provenance for clean-room use.
-    The temporary runner therefore prevents the notebook's initial blank audit export
-    from overwriting that committed provenance, while leaving filtering, recovery,
-    sampling, and all frozen experimental logic unchanged.
+    Notebook 02 records an interrupted manual topical-relevance audit. A complete
+    original audit CSV is committed as provenance for clean-room use. The temporary
+    runner therefore preserves the path-definition part of the notebook's initial
+    audit-export cell but removes only the write operation that would overwrite the
+    completed audit with blank annotation columns. Historical interactive audit calls
+    before the recovery checkpoint are also skipped. Filtering, sampling, recovery,
+    and all frozen experimental logic remain unchanged.
     """
     recovery_index = None
     for index, cell in enumerate(notebook.cells):
@@ -107,15 +108,24 @@ def prepare_notebook02(notebook) -> int:
 
         source = "".join(cell.get("source", []))
 
-        # The notebook originally creates a blank manual-audit CSV before the
-        # human review. In clean-room execution, preserve the committed completed
-        # audit instead of clobbering it with blank annotation columns.
+        # The notebook originally defines validation_path and then writes a blank
+        # audit CSV before human review. Keep the path definition for downstream
+        # cells, but remove only the overwrite when committed provenance exists.
         is_blank_audit_export = (
             use_committed_audit
             and NOTEBOOK02_MANUAL_AUDIT_FILENAME in source
             and "validation_df.to_csv" in source
         )
         if is_blank_audit_export:
+            cell["source"] = [
+                "validation_path = (\n",
+                "    SAMPLES_DIR\n",
+                f'    / "{NOTEBOOK02_MANUAL_AUDIT_FILENAME}"\n',
+                ")\n",
+                "\n",
+                "print(\"Using committed manual audit:\", validation_path)\n",
+            ]
+            kept.append(cell)
             skipped += 1
             continue
 
@@ -202,8 +212,8 @@ def execute_notebook(name: str) -> None:
     print("=" * 78)
     if audit_cells_skipped:
         print(
-            f"Skipped {audit_cells_skipped} Notebook 02 clean-room-only audit "
-            "replay cell(s); committed manual-audit provenance is preserved."
+            f"Adjusted/skipped {audit_cells_skipped} Notebook 02 clean-room-only "
+            "audit replay cell(s); committed manual-audit provenance is preserved."
         )
     if environment_cells_skipped:
         print(
