@@ -117,14 +117,14 @@ def prepare_notebook02(notebook) -> int:
             and "validation_df.to_csv" in source
         )
         if is_blank_audit_export:
-            cell["source"] = [
-                "validation_path = (\n",
-                "    SAMPLES_DIR\n",
-                f'    / "{NOTEBOOK02_MANUAL_AUDIT_FILENAME}"\n',
-                ")\n",
-                "\n",
-                "print(\"Using committed manual audit:\", validation_path)\n",
-            ]
+            cell["source"] = (
+                "validation_path = (\n"
+                "    SAMPLES_DIR\n"
+                f'    / "{NOTEBOOK02_MANUAL_AUDIT_FILENAME}"\n'
+                ")\n"
+                "\n"
+                'print("Using committed manual audit:", validation_path)\n'
+            )
             kept.append(cell)
             skipped += 1
             continue
