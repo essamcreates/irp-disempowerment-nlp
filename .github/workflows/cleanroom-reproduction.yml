@@ -62,6 +62,38 @@ jobs:
         run: |
           python scripts/run_cleanroom.py
 
+      - name: Print non-text pilot diagnostics on failure
+        if: failure()
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import pandas as pd
+          from src.labelling import weak_label_disempowerment
+
+          path = Path('data/samples/lmsys_relevance_pilot_100.csv')
+          if not path.exists():
+              print('Pilot CSV not available for diagnostics.')
+              raise SystemExit(0)
+
+          df = pd.read_csv(path)
+          positives = []
+          for _, row in df.iterrows():
+              result = weak_label_disempowerment(row['user_text'], row['assistant_text'])
+              if result['weak_label_any']:
+                  positives.append({
+                      'source_index': int(row['source_index']),
+                      'pair_index': int(row['pair_index']),
+                      'weak_labels': result['weak_labels'],
+                      'directive_evidence': result['directive_evidence'],
+                  })
+
+          print('Pilot row count:', len(df))
+          print('Positive count:', len(positives))
+          print('Positive identifiers/evidence only:')
+          for item in positives:
+              print(item)
+          PY
+
       - name: Upload executed notebook copies on failure
         if: failure()
         uses: actions/upload-artifact@v4
