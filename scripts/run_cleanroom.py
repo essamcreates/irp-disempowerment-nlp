@@ -2,15 +2,15 @@
 """
 Execute the IRP notebooks in clean-room order in GitHub Codespaces or Actions.
 
-The original notebooks preserve historical exploratory/environment-repair cells.
-This runner executes temporary copies and skips only cells that mutate the Python
-environment. It never edits the source notebooks.
+The original notebooks preserve historical exploratory/environment-repair cells and
+manual-audit provenance. This runner executes temporary copies, skips only cells
+that must not be replayed in a clean-room environment, and never edits the source
+notebooks or frozen experimental logic.
 """
 
 from __future__ import annotations
 
 import argparse
-import ast
 import os
 import subprocess
 import sys
@@ -44,10 +44,11 @@ ENVIRONMENT_MUTATION_MARKERS = (
     "Restart the Jupyter kernel now",
 )
 
-NOTEBOOK02_HELPERS = (
-    "show_validation_example",
-    "show_next_unreviewed",
-    "label_validation_example",
+NOTEBOOK02_RECOVERY_MARKER = "Successfully recovered labels:"
+NOTEBOOK02_INTERACTIVE_CALLS = (
+    "show_next_unreviewed()",
+    "label_validation_example(",
+    "show_validation_example(",
 )
 
 
@@ -68,61 +69,59 @@ def is_environment_mutation_cell(cell: dict) -> bool:
     )
 
 
-def inject_notebook02_helpers(notebook) -> int:
+def prepare_notebook02(notebook) -> int:
+    """Prepare Notebook 02 for faithful sequential clean-room execution.
+
+    Notebook 02 records an interrupted manual topical-relevance audit. The notebook
+    later reconstructs the successfully saved historical decisions by reading the
+    recorded outputs from the source notebook, then resumes from the first genuinely
+    unreviewed row. Re-executing the earlier interactive labelling cells before that
+    recovery block would create new decisions that were never part of the frozen
+    audit and can change the downstream 100-example pilot.
+
+    For the temporary execution copy only, skip those pre-recovery interactive calls.
+    The data filtering/sampling cells, the recovery code, the explicit missing-row
+    repair, and all subsequent recorded manual decisions still execute unchanged.
     """
-    Make Notebook 02 executable top-to-bottom without changing its source file.
-
-    The historical notebook contains manual-review helper functions that were
-    defined later during the interactive annotation session, while earlier cells
-    call those helpers. For a clean-room sequential run, copy just those function
-    definitions into a temporary synthetic cell immediately before their first
-    use. The original notebook remains untouched and its recorded decisions are
-    still executed exactly as stored.
-    """
-    definitions: dict[str, str] = {}
-
-    for cell in notebook.cells:
-        if cell.get("cell_type") != "code":
-            continue
-
-        source = "".join(cell.get("source", []))
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
-            continue
-
-        for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if node.name in NOTEBOOK02_HELPERS and node.name not in definitions:
-                    definitions[node.name] = ast.unparse(node)
-
-    missing = [name for name in NOTEBOOK02_HELPERS if name not in definitions]
-    if missing:
-        raise RuntimeError(
-            "Notebook 02 clean-room helper definitions could not be found: "
-            + ", ".join(missing)
-        )
-
-    first_use_index = None
+    recovery_index = None
     for index, cell in enumerate(notebook.cells):
         if cell.get("cell_type") != "code":
             continue
         source = "".join(cell.get("source", []))
-        if "show_next_unreviewed()" in source and "def show_next_unreviewed" not in source:
-            first_use_index = index
+        if NOTEBOOK02_RECOVERY_MARKER in source:
+            recovery_index = index
             break
 
-    if first_use_index is None:
-        raise RuntimeError("Notebook 02 first manual-review helper use was not found.")
+    if recovery_index is None:
+        raise RuntimeError("Notebook 02 historical audit recovery block was not found.")
 
-    helper_source = (
-        "# Clean-room execution shim: hoist historical manual-review helpers.\n"
-        "# The source notebook is not modified.\n"
-        "from IPython.display import display, Markdown\n\n"
-        + "\n\n".join(definitions[name] for name in NOTEBOOK02_HELPERS)
-    )
-    notebook.cells.insert(first_use_index, nbformat.v4.new_code_cell(helper_source))
-    return 1
+    kept = []
+    skipped = 0
+
+    for index, cell in enumerate(notebook.cells):
+        if index >= recovery_index or cell.get("cell_type") != "code":
+            kept.append(cell)
+            continue
+
+        source = "".join(cell.get("source", []))
+
+        # Keep helper definitions; skip only calls that historically required a
+        # human-in-the-loop decision before the notebook's own recovery checkpoint.
+        is_definition = (
+            "def show_next_unreviewed" in source
+            or "def label_validation_example" in source
+            or "def show_validation_example" in source
+        )
+        is_interactive_call = any(marker in source for marker in NOTEBOOK02_INTERACTIVE_CALLS)
+
+        if is_interactive_call and not is_definition:
+            skipped += 1
+            continue
+
+        kept.append(cell)
+
+    notebook.cells = kept
+    return skipped
 
 
 def ensure_supported_layout() -> None:
@@ -174,28 +173,29 @@ def execute_notebook(name: str) -> None:
     with source_path.open("r", encoding="utf-8") as handle:
         notebook = nbformat.read(handle, as_version=4)
 
-    injected = 0
+    audit_cells_skipped = 0
     if name == "02_filtering_and_sampling.ipynb":
-        injected = inject_notebook02_helpers(notebook)
+        audit_cells_skipped = prepare_notebook02(notebook)
 
     original_count = len(notebook.cells)
     notebook.cells = [
         cell for cell in notebook.cells if not is_environment_mutation_cell(cell)
     ]
-    skipped = original_count - len(notebook.cells)
+    environment_cells_skipped = original_count - len(notebook.cells)
 
     print("\n" + "=" * 78)
     print(f"Running {name}")
     print("=" * 78)
-    if injected:
+    if audit_cells_skipped:
         print(
-            "Inserted a temporary Notebook 02 helper-definition shim for "
-            "top-to-bottom execution."
+            f"Skipped {audit_cells_skipped} pre-recovery interactive Notebook 02 "
+            "audit cell(s); the notebook's recorded-output recovery stage will "
+            "reconstruct the frozen manual decisions."
         )
-    if skipped:
+    if environment_cells_skipped:
         print(
-            f"Skipped {skipped} historical environment-repair cell(s). "
-            "The locked environment is used instead."
+            f"Skipped {environment_cells_skipped} historical environment-repair "
+            "cell(s). The locked environment is used instead."
         )
 
     executor = ExecutePreprocessor(
