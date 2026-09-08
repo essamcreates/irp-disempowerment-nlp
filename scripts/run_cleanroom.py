@@ -44,13 +44,9 @@ ENVIRONMENT_MUTATION_MARKERS = (
     "Restart the Jupyter kernel now",
 )
 
-NOTEBOOK02_RECOVERY_MARKER = "Successfully recovered labels:"
-NOTEBOOK02_INTERACTIVE_CALLS = (
-    "show_next_unreviewed()",
-    "label_validation_example(",
-    "show_validation_example(",
-)
 NOTEBOOK02_MANUAL_AUDIT_FILENAME = "lmsys_relevance_manual_validation_200.csv"
+NOTEBOOK02_AUDIT_LOAD_MARKER = "validation_df = pd.read_csv("
+NOTEBOOK02_DOWNSTREAM_MARKER = "validated_relevant_df = validation_df["
 
 
 def is_environment_mutation_cell(cell: dict) -> bool:
@@ -71,35 +67,41 @@ def is_environment_mutation_cell(cell: dict) -> bool:
 
 
 def prepare_notebook02(notebook) -> int:
-    """Prepare Notebook 02 for faithful sequential clean-room execution.
+    """Prepare Notebook 02 for faithful clean-room execution.
 
-    Notebook 02 records an interrupted manual topical-relevance audit. A complete
-    original audit CSV is committed as provenance for clean-room use. The temporary
-    runner therefore preserves the path-definition part of the notebook's initial
-    audit-export cell but removes only the write operation that would overwrite the
-    completed audit with blank annotation columns. Historical interactive audit calls
-    are skipped when committed audit provenance is available. Filtering, sampling,
-    recovery, and all frozen experimental logic remain unchanged.
+    The completed 200-row manual topical-relevance audit is committed as provenance.
+    In a clean-room run we therefore preserve the notebook's filtering/sampling setup,
+    replace only the initial blank-audit export with a path definition, load the
+    committed audit, skip the historical human-in-the-loop audit/recovery transcript,
+    and resume at the notebook's unchanged downstream validated-pool construction.
+    The source notebook, labels, filtering logic, sampling logic, and results are not
+    modified.
     """
-    recovery_index = None
+    manual_audit_path = (
+        PROJECT_ROOT / "data" / "samples" / NOTEBOOK02_MANUAL_AUDIT_FILENAME
+    )
+    if not manual_audit_path.exists():
+        return 0
+
+    load_index = None
+    downstream_index = None
     for index, cell in enumerate(notebook.cells):
         if cell.get("cell_type") != "code":
             continue
         source = "".join(cell.get("source", []))
-        if NOTEBOOK02_RECOVERY_MARKER in source:
-            recovery_index = index
+        if load_index is None and NOTEBOOK02_AUDIT_LOAD_MARKER in source:
+            load_index = index
+        if NOTEBOOK02_DOWNSTREAM_MARKER in source:
+            downstream_index = index
             break
 
-    if recovery_index is None:
-        raise RuntimeError("Notebook 02 historical audit recovery block was not found.")
-
-    manual_audit_path = (
-        PROJECT_ROOT / "data" / "samples" / NOTEBOOK02_MANUAL_AUDIT_FILENAME
-    )
-    use_committed_audit = manual_audit_path.exists()
+    if load_index is None or downstream_index is None or load_index >= downstream_index:
+        raise RuntimeError(
+            "Notebook 02 clean-room audit checkpoint markers were not found in the expected order."
+        )
 
     kept = []
-    skipped = 0
+    adjusted = 0
 
     for index, cell in enumerate(notebook.cells):
         if cell.get("cell_type") != "code":
@@ -108,12 +110,8 @@ def prepare_notebook02(notebook) -> int:
 
         source = "".join(cell.get("source", []))
 
-        # The notebook originally defines validation_path and then writes a blank
-        # audit CSV before human review. Keep the path definition for downstream
-        # cells, but remove only the overwrite when committed provenance exists.
         is_blank_audit_export = (
-            use_committed_audit
-            and NOTEBOOK02_MANUAL_AUDIT_FILENAME in source
+            NOTEBOOK02_MANUAL_AUDIT_FILENAME in source
             and "validation_df.to_csv" in source
         )
         if is_blank_audit_export:
@@ -126,36 +124,20 @@ def prepare_notebook02(notebook) -> int:
                 'print("Using committed manual audit:", validation_path)\n'
             )
             kept.append(cell)
-            skipped += 1
+            adjusted += 1
             continue
 
-        # Keep helper definitions, but do not replay any historical interactive
-        # manual-audit calls when the completed committed audit is available.
-        is_definition = (
-            "def show_next_unreviewed" in source
-            or "def label_validation_example" in source
-            or "def show_validation_example" in source
-        )
-        is_interactive_call = any(marker in source for marker in NOTEBOOK02_INTERACTIVE_CALLS)
-        if use_committed_audit and is_interactive_call and not is_definition:
-            skipped += 1
-            continue
-
-        # Without committed audit provenance, preserve the original fallback
-        # behaviour: skip only pre-recovery interactive calls.
-        if (
-            not use_committed_audit
-            and index < recovery_index
-            and is_interactive_call
-            and not is_definition
-        ):
-            skipped += 1
+        # Keep the audit-loading/normalisation cell, but skip the historical
+        # interactive/recovery transcript that follows it. The committed audit
+        # already contains those completed decisions and is the clean-room input.
+        if load_index < index < downstream_index:
+            adjusted += 1
             continue
 
         kept.append(cell)
 
     notebook.cells = kept
-    return skipped
+    return adjusted
 
 
 def ensure_supported_layout() -> None:
@@ -223,7 +205,7 @@ def execute_notebook(name: str) -> None:
     if audit_cells_skipped:
         print(
             f"Adjusted/skipped {audit_cells_skipped} Notebook 02 clean-room-only "
-            "audit replay cell(s); committed manual-audit provenance is preserved."
+            "audit transcript cell(s); committed manual-audit provenance is used."
         )
     if environment_cells_skipped:
         print(
