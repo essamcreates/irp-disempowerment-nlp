@@ -20,7 +20,9 @@ NOTEBOOK02_AUDIT_LOAD_MARKER = "validation_df = pd.read_csv("
 NOTEBOOK02_DOWNSTREAM_MARKER = "validated_relevant_df = validation_df["
 NOTEBOOK02_INTERACTIVE_CALLS = ("show_next_unreviewed()","label_validation_example(","show_validation_example(")
 NOTEBOOK06_SCALED_AUDIT_FILENAME = "lmsys_scaled_weak_v5_positive_audit_34.csv"
+NOTEBOOK06_FULL_POSITIVE_AUDIT_FILENAME = "lmsys_full_weak_v5_positive_audit_56.csv"
 NOTEBOOK06_SCALED_VERIFY_MARKER = "# Verify completed scaled positive audit"
+NOTEBOOK06_FULL_POSITIVE_COMBINE_MARKER = "# Combine and save the complete 56-example positive audit"
 
 def is_environment_mutation_cell(cell: dict) -> bool:
     if cell.get("cell_type") != "code": return False
@@ -55,31 +57,67 @@ def prepare_notebook02(notebook) -> int:
     return adjusted
 
 def prepare_notebook06(notebook) -> int:
-    """Reload the committed 34-row human audit immediately before verification.
+    """Use committed human-audit provenance at Notebook 06 audit checkpoints.
 
-    Sequential replay of the historical Notebook 06 transcript recreates a blank
-    audit and only its first recorded interactive decision. The completed original
-    audit is committed as provenance. The temporary clean-room copy therefore
-    reloads that file immediately before the notebook's own frozen assertions.
-    This changes neither labels nor source experimental logic.
+    The source notebook preserves the historical interactive audit transcript. In a
+    fresh sequential replay those transcript cells recreate partially reviewed audit
+    frames. The clean-room copy reloads the committed completed audits immediately at
+    the corresponding frozen checkpoints. Source experimental logic and labels are
+    not edited.
     """
-    audit_path = PROJECT_ROOT / "data" / "samples" / NOTEBOOK06_SCALED_AUDIT_FILENAME
-    if not audit_path.is_file():
-        raise RuntimeError(
-            "Committed Notebook 06 audit provenance is missing: " + str(audit_path)
-        )
-    for index, cell in enumerate(notebook.cells):
-        if cell.get("cell_type") != "code": continue
+    scaled_path = PROJECT_ROOT / "data" / "samples" / NOTEBOOK06_SCALED_AUDIT_FILENAME
+    full_positive_path = PROJECT_ROOT / "data" / "samples" / NOTEBOOK06_FULL_POSITIVE_AUDIT_FILENAME
+    for path in (scaled_path, full_positive_path):
+        if not path.is_file():
+            raise RuntimeError("Committed Notebook 06 audit provenance is missing: " + str(path))
+
+    adjusted = 0
+    found_scaled = False
+    found_full = False
+    for cell in notebook.cells:
+        if cell.get("cell_type") != "code":
+            continue
         source = "".join(cell.get("source", []))
         if NOTEBOOK06_SCALED_VERIFY_MARKER in source:
-            loader = nbformat.v4.new_code_cell(
+            cell["source"] = (
                 f'scaled_positive_audit_path = PROJECT_ROOT / "data" / "samples" / "{NOTEBOOK06_SCALED_AUDIT_FILENAME}"\n'
                 'scaled_positive_audit_df = pd.read_csv(scaled_positive_audit_path)\n'
-                'print("Using committed scaled positive audit:", scaled_positive_audit_path)\n'
+                'print("Using committed scaled positive audit:", scaled_positive_audit_path)\n\n'
+                + source
             )
-            notebook.cells.insert(index, loader)
-            return 1
-    raise RuntimeError("Notebook 06 scaled positive audit verification marker was not found.")
+            adjusted += 1
+            found_scaled = True
+        elif NOTEBOOK06_FULL_POSITIVE_COMBINE_MARKER in source:
+            cell["source"] = (
+                f'complete_positive_audit_path = PROJECT_ROOT / "data" / "samples" / "{NOTEBOOK06_FULL_POSITIVE_AUDIT_FILENAME}"\n'
+                'complete_positive_audit_df = pd.read_csv(complete_positive_audit_path)\n'
+                'complete_positive_audit_df["manual_audit_valid"] = pd.to_numeric(complete_positive_audit_df["manual_audit_valid"], errors="coerce")\n'
+                'assert len(complete_positive_audit_df) == 56\n'
+                'assert complete_positive_audit_df["audit_number"].tolist() == list(range(1, 57))\n'
+                'assert complete_positive_audit_df[["source_index", "pair_index"]].duplicated().sum() == 0\n'
+                'assert complete_positive_audit_df["manual_audit_valid"].notna().all()\n'
+                'total_valid = int(complete_positive_audit_df["manual_audit_valid"].sum())\n'
+                'total_false_positive = len(complete_positive_audit_df) - total_valid\n'
+                'assert total_valid == 16\n'
+                'assert total_false_positive == 40\n'
+                'final_audit_summary = complete_positive_audit_df.groupby("weak_labels").agg(detected=("audit_number", "size"), valid=("manual_audit_valid", "sum"))\n'
+                'final_audit_summary["valid"] = final_audit_summary["valid"].astype(int)\n'
+                'final_audit_summary["false_positive"] = final_audit_summary["detected"] - final_audit_summary["valid"]\n'
+                'final_audit_summary["audit_precision_pct"] = (final_audit_summary["valid"] / final_audit_summary["detected"] * 100).round(1)\n'
+                'overall_audit_precision = total_valid / len(complete_positive_audit_df) * 100\n'
+                'print("Using committed complete positive audit:", complete_positive_audit_path)\n'
+                'print("Reviewed:", len(complete_positive_audit_df), "/ 56")\n'
+                'print("Valid:", total_valid)\n'
+                'print("False positives:", total_false_positive)\n'
+                'display(final_audit_summary)\n'
+            )
+            adjusted += 1
+            found_full = True
+    if not found_scaled:
+        raise RuntimeError("Notebook 06 scaled positive audit verification marker was not found.")
+    if not found_full:
+        raise RuntimeError("Notebook 06 complete positive audit checkpoint marker was not found.")
+    return adjusted
 
 def ensure_supported_layout() -> None:
     expected = Path("/workspaces/irp-disempowerment-nlp")
