@@ -9,6 +9,19 @@ The frozen experiment is preserved. The clean-room tooling does **not** change m
 
 > This is a research experiment, not a production harm-detection system. Weak labels are heuristic linguistic indicators and should not be treated as definitive diagnoses of harm or disempowerment.
 
+## Final sharing-readiness verification
+
+The sanitized `reproducibility/clean-room-guide` branch has passed the full `Clean-room reproduction` workflow after removal of tracked LMSYS-derived sample/audit CSVs. The successful release-gate run verified all of the following together:
+
+- tracked `data/samples/` contains only `.gitkeep`;
+- the four files under `provenance/` contain decision-only identifier/category/decision fields and no conversation text, evidence, or audit notes;
+- the repository runs from GitHub Actions' ordinary arbitrary checkout directory, without a `/workspaces/irp-disempowerment-nlp` compatibility symlink;
+- notebooks **01–07** execute in order through the portable runner;
+- the full reproduction verifier passes with the frozen experimental checkpoints intact;
+- the privacy regression check still passes after notebook execution.
+
+This makes the **current branch tip / exported ZIP tree** suitable for artefact sharing. It does **not** erase LMSYS-derived files from older Git commits, pull-request refs, Actions logs/caches, or other retained GitHub history; see **Historical Git limitation** below.
+
 ## Running from the submitted ZIP
 
 This is the recommended route for an examiner or third-party reviewer. **GitHub Codespaces is optional, not required.** A fresh extracted ZIP can be run from any ordinary local project directory on Windows, macOS, or Linux.
