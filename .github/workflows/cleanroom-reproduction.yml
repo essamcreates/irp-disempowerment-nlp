@@ -84,21 +84,11 @@ jobs:
                       'source_index': int(row['source_index']),
                       'pair_index': int(row['pair_index']),
                       'weak_labels': result['weak_labels'],
-                      'directive_evidence': result['directive_evidence'],
                   })
 
           print('Pilot row count:', len(df))
           print('Positive count:', len(positives))
-          print('Positive identifiers/evidence only:')
+          print('Positive identifiers/categories only:')
           for item in positives:
               print(item)
           PY
-
-      - name: Upload executed notebook copies on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cleanroom-failure-notebooks
-          path: .cleanroom_runs/
-          if-no-files-found: ignore
-          retention-days: 3
