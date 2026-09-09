@@ -60,8 +60,19 @@ def repair_generated_compatibility_source(notebook) -> int:
         if cell.get("cell_type") != "code":
             continue
         source = "".join(cell.get("source", []))
-        if malformed in source:
-            cell["source"] = source.replace(malformed, replacement)
+        updated = source
+        if malformed in updated:
+            updated = updated.replace(malformed, replacement)
+        if (
+            "complete_positive_audit_df.to_csv" in updated
+            and "positive_audit_check_df =" not in updated
+        ):
+            updated += (
+                "\n# Runner-only compatibility alias for the frozen downstream target cell.\n"
+                "positive_audit_check_df = complete_positive_audit_df.copy()\n"
+            )
+        if updated != source:
+            cell["source"] = updated
             changed += 1
     return changed
 
