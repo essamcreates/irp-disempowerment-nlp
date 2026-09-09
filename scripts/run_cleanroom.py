@@ -55,16 +55,19 @@ def prepare_notebook02(notebook) -> int:
     return adjusted
 
 def prepare_notebook06(notebook) -> int:
-    """Restore the committed 34-row human audit immediately before its verification.
+    """Reload the committed 34-row human audit immediately before verification.
 
-    Notebook 06 preserves the historical interactive audit transcript. Sequential
-    replay recreates a blank audit and only the first historical decision before the
-    checkpoint. The original completed audit is committed as provenance, so the
-    temporary clean-room copy reloads it at the checkpoint. No labels or source
-    experimental logic are changed.
+    Sequential replay of the historical Notebook 06 transcript recreates a blank
+    audit and only its first recorded interactive decision. The completed original
+    audit is committed as provenance. The temporary clean-room copy therefore
+    reloads that file immediately before the notebook's own frozen assertions.
+    This changes neither labels nor source experimental logic.
     """
     audit_path = PROJECT_ROOT / "data" / "samples" / NOTEBOOK06_SCALED_AUDIT_FILENAME
-    if not audit_path.exists(): return 0
+    if not audit_path.is_file():
+        raise RuntimeError(
+            "Committed Notebook 06 audit provenance is missing: " + str(audit_path)
+        )
     for index, cell in enumerate(notebook.cells):
         if cell.get("cell_type") != "code": continue
         source = "".join(cell.get("source", []))
