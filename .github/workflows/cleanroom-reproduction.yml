@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   reproduce:
@@ -15,8 +15,10 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Check out repository
+      - name: Check out repository branch
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -29,6 +31,23 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-lock.txt
           python -m pip check
+
+      - name: Sanitize tracked audit provenance
+        run: |
+          python scripts/sanitize_audit_provenance.py
+
+      - name: Commit sanitized provenance
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard provenance)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A data/samples provenance
+            git commit -m "Replace LMSYS text files with decision-only provenance"
+            git push origin HEAD:${GITHUB_HEAD_REF}
+          else
+            echo "No sanitization changes to commit."
+          fi
 
       - name: Check Hugging Face token
         env:
