@@ -70,7 +70,7 @@ def prepare_notebook06(notebook) -> int:
         source = "".join(cell.get("source", []))
         if NOTEBOOK06_SCALED_VERIFY_MARKER in source:
             loader = nbformat.v4.new_code_cell(
-                f'scaled_positive_audit_path = SCALED_DATA_DIR / "{NOTEBOOK06_SCALED_AUDIT_FILENAME}"\n'
+                f'scaled_positive_audit_path = PROJECT_ROOT / "data" / "samples" / "{NOTEBOOK06_SCALED_AUDIT_FILENAME}"\n'
                 'scaled_positive_audit_df = pd.read_csv(scaled_positive_audit_path)\n'
                 'print("Using committed scaled positive audit:", scaled_positive_audit_path)\n'
             )
