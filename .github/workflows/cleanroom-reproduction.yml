@@ -33,8 +33,7 @@ jobs:
           python -m pip check
 
       - name: Check public-sharing privacy invariants
-        run: |
-          python scripts/check_public_sharing.py
+        run: python scripts/check_public_sharing.py
 
       - name: Check Hugging Face token
         env:
@@ -57,16 +56,20 @@ jobs:
           PY
           hf auth whoami
 
-      - name: Provide Codespaces-compatible absolute path
+      - name: Confirm arbitrary checkout path
         run: |
-          sudo mkdir -p /workspaces
-          sudo ln -sfn "$GITHUB_WORKSPACE" /workspaces/irp-disempowerment-nlp
+          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+          test "$GITHUB_WORKSPACE" != "/workspaces/irp-disempowerment-nlp"
+          test ! -e /workspaces/irp-disempowerment-nlp
 
-      - name: Run clean-room notebooks 01-07
+      - name: Run clean-room notebooks 01-07 and full verifier
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          python scripts/run_cleanroom.py
+        run: python scripts/run_cleanroom.py
+
+      - name: Re-check public-sharing privacy invariants
+        if: always()
+        run: python scripts/check_public_sharing.py
 
       - name: Print non-text pilot diagnostics on failure
         if: failure()
