@@ -1,150 +1,258 @@
 # Data-Centric AI Safety
 
-## Evaluating Text Cleaning Techniques for Robust Detection of Disempowerment Patterns in Human-AI Conversations
+## Clean-room reproduction guide
+### Evaluating Text Cleaning Techniques for Robust Detection of Disempowerment Patterns in Human-AI Conversations
 
-This repository contains the technical artefact developed for an MSc Independent Research Project investigating how text cleaning and preprocessing choices affect the robustness of NLP classifiers for detecting disempowerment-associated patterns in human-AI conversations.
+This repository contains the completed technical artefact for an MSc Independent Research Project investigating how text cleaning and preprocessing affect robustness of an NLP classifier for disempowerment-associated patterns in human-AI conversations.
 
-The artefact implements a reproducible Python-based experimental pipeline covering:
+The frozen experiment is preserved. The clean-room tooling does **not** change methodology, weak labels, source experimental logic, random seed, or reported results. It exists only to make reproduction safer, more portable, and easier to verify.
 
-- streamed dataset inspection and filtering;
-- deterministic sampling;
-- weak labelling of disempowerment-associated patterns;
-- synthetic textual noise generation;
-- multiple preprocessing configurations;
-- TF-IDF feature extraction;
-- LinearSVC classification;
-- source-level cross-validation;
-- robustness evaluation;
-- decision-score sensitivity analysis;
-- linguistic cue-retention analysis;
-- pilot-to-scaled experimental synthesis.
+> This is a research experiment, not a production harm-detection system. Weak labels are heuristic linguistic indicators and should not be treated as definitive diagnoses of harm or disempowerment.
 
-The repository supports reproducibility of the technical artefact. Classifier outputs are not presented as diagnoses of harm or as exhaustive ground-truth annotations.
+## Final sharing-readiness verification
 
----
+The sanitized `reproducibility/clean-room-guide` branch has passed the full `Clean-room reproduction` workflow after removal of tracked LMSYS-derived sample/audit CSVs. The successful release-gate run verified all of the following together:
 
-## Research questions
+- tracked `data/samples/` contains only `.gitkeep`;
+- the four files under `provenance/` contain decision-only identifier/category/decision fields and no conversation text, evidence, or audit notes;
+- the repository runs from GitHub Actions' ordinary arbitrary checkout directory, without a `/workspaces/irp-disempowerment-nlp` compatibility symlink;
+- notebooks **01–07** execute in order through the portable runner;
+- the full reproduction verifier passes with the frozen experimental checkpoints intact;
+- the privacy regression check still passes after notebook execution.
 
-**RQ1.** How do text cleaning and preprocessing strategies affect the robustness of NLP classifiers for detecting disempowerment patterns in noisy human-AI conversations?
+This makes the **current branch tip / exported ZIP tree** suitable for artefact sharing. It does **not** erase LMSYS-derived files from older Git commits, pull-request refs, Actions logs/caches, or other retained GitHub history; see **Historical Git limitation** below.
 
-**RQ2.** Which textual noise types and preprocessing configurations produce the greatest changes in classifier performance across clean, noisy, and cleaned-noisy conversation data?
+## Running from the submitted ZIP
 
-**RQ3.** How do preprocessing choices influence the preservation or loss of linguistic cues associated with disempowerment, including sycophantic validation, overconfident judgement, and directive advice?
+This is the recommended route for an examiner or third-party reviewer. **GitHub Codespaces is optional, not required.** A fresh extracted ZIP can be run from any ordinary local project directory on Windows, macOS, or Linux.
 
----
+### Prerequisites
 
-## Dataset
+You need:
 
-The primary dataset is:
+- Python **3.12**;
+- an internet connection for dependency installation and LMSYS streaming;
+- a Hugging Face account with access to `lmsys/lmsys-chat-1m`;
+- enough disk space for generated intermediate files and results;
+- patience for the scaled LMSYS scan and model evaluation.
 
-```text
-lmsys/lmsys-chat-1m
-```
-
-The experiments use the pinned dataset revision:
+The dataset revision used by the frozen experiment is:
 
 ```text
 200748d9d3cddcc9d782887541057aca0b18c5da
 ```
 
-Dataset access requires a Hugging Face account with access to LMSYS-Chat-1M.
+### 1. Extract the ZIP
 
-Authenticate locally before running the dataset notebooks:
+Extract it anywhere convenient, for example:
+
+```text
+C:\Users\you\Documents\irp-disempowerment-nlp
+/Users/you/Documents/irp-disempowerment-nlp
+/home/you/irp-disempowerment-nlp
+```
+
+The clean-room runner detects the project directory automatically. Historical absolute Codespaces paths are rewritten **only in temporary notebook copies**. The frozen source notebooks under `notebooks/` are never edited.
+
+### 2. Create a virtual environment
+
+#### Windows PowerShell
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-lock.txt
+python -m pip check
+```
+
+If PowerShell blocks activation, use a normal user-scoped execution policy or run the equivalent commands from Command Prompt. Do not modify the project notebooks to work around environment setup.
+
+#### macOS / Linux
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-lock.txt
+python -m pip check
+```
+
+A healthy environment should end with:
+
+```text
+No broken requirements found.
+```
+
+### 3. Authenticate with Hugging Face
+
+First make sure your Hugging Face account has accepted any access conditions for LMSYS-Chat-1M.
+
+Then run:
 
 ```bash
 hf auth login
 ```
 
-Do not commit Hugging Face access tokens, raw LMSYS conversation data, or local dataset samples.
+Use a read token. Do not paste tokens into notebooks, scripts, or committed files.
 
----
-
-## Environment
-
-The artefact was developed using Python 3.12.
-
-Install the declared dependency ranges with:
+You can confirm the login with:
 
 ```bash
-pip install -r requirements.txt
+hf auth whoami
 ```
 
-For exact reproduction of the final development environment:
+If you receive `401`, `403`, gated-dataset, or authentication errors, confirm that the logged-in Hugging Face account has access to `lmsys/lmsys-chat-1m`.
+
+### 4. Run the complete artefact
+
+From the extracted project directory, run:
 
 ```bash
-pip install -r requirements-lock.txt
+python scripts/run_cleanroom.py
 ```
 
-The final environment passed:
+That single command:
+
+- checks the installed environment;
+- registers the current Python environment as the temporary Jupyter kernel;
+- runs notebooks **01 through 07 in order**;
+- replays the original human decisions from decision-only provenance under `provenance/`;
+- skips historical environment-repair cells that would mutate the locked environment;
+- rewrites historical absolute Codespaces paths only in temporary notebook copies;
+- stores executed temporary copies under `.cleanroom_runs/`;
+- runs `scripts/verify_reproduction.py --full` at the end.
+
+`.cleanroom_runs/` is local-only and must not be committed or shared as a dataset-derived artefact.
+
+### Expected runtime
+
+Runtime depends heavily on internet throughput and compute. Notebook 06 is the longest stage because it performs the scaled LMSYS scan and evaluation. A complete clean-room run can take roughly **45–120 minutes**, and slower connections may take longer.
+
+Long streaming/model cells can remain quiet for several minutes without being stuck.
+
+## Reproduction checkpoints
+
+A successful full reproduction should reach these frozen checkpoints:
+
+```text
+Scaled sources:                      1,633
+Positive target examples:               17
+Negative target examples:            1,616
+Positive prevalence:                 ~1.04%
+Noise conditions:                         8
+Preprocessing configurations:             4
+Total experimental conditions:           32
+OOF evaluation rows:                 52,256
+```
+
+Clean + no preprocessing:
+
+```text
+Pooled ROC-AUC:                0.8628
+Pooled Average Precision:      0.1233
+Mean-fold ROC-AUC:             0.8729
+Mean-fold Average Precision:   0.1974
+Predicted positives at default
+LinearSVC threshold:                0
+```
+
+Notebook 07 should finish with:
+
+```text
+NOTEBOOK 07 FINAL INTEGRITY CHECK PASSED.
+```
+
+The full verifier should also complete successfully.
+
+## Privacy-safe decision provenance
+
+The public/shareable branch intentionally does **not** track LMSYS-derived text samples or raw audit CSVs under `data/samples/`.
+
+Only this placeholder is tracked there:
+
+```text
+data/samples/.gitkeep
+```
+
+The original manual decisions required for exact software reproduction are stored under `provenance/` as compact decision-only CSVs:
+
+```text
+manual_relevance_decisions_200.csv
+scaled_positive_audit_decisions_34.csv
+full_positive_audit_decisions_56.csv
+full_negative_audit_decisions_100.csv
+```
+
+These files contain only identifiers, weak-label/category fields where required for deterministic joins, and manual decision fields. They do **not** contain `user_text`, `assistant_text`, quoted evidence, free-text audit notes, prompts, responses, or conversation text.
+
+Run the privacy regression check at any time with:
 
 ```bash
-python -m pip check
+python scripts/check_public_sharing.py
 ```
 
-All 125 packages in `requirements-lock.txt` matched the working environment.
+It fails if:
 
-Key package versions:
+- tracked `data/samples/` contains anything other than `.gitkeep`;
+- an expected provenance file is missing;
+- an unexpected provenance CSV is present;
+- provenance headers contain text/evidence/note-style columns;
+- provenance contains columns outside the approved identifier/category/decision schema.
+
+## What the project does
+
+The pipeline:
+
+1. streams LMSYS-Chat-1M;
+2. extracts eligible English user-assistant exchanges;
+3. applies the frozen relevance filter;
+4. creates deterministic candidate pools and a pilot sample;
+5. applies frozen weak-labelling rules for sycophantic validation, overconfident judgement, and directive advice;
+6. replays the original manual relevance/audit decisions for exact reproduction;
+7. injects controlled synthetic text noise;
+8. applies four preprocessing configurations;
+9. trains the TF-IDF + LinearSVC baseline;
+10. evaluates held-out sources across 32 noise × preprocessing conditions;
+11. analyses score robustness and cue retention;
+12. compares pilot and scaled results.
+
+The final 1,633-row target is an **audit-corrected weak-label target**, not exhaustive human-annotated ground truth.
+
+## Notebook order
+
+The clean-room runner executes:
 
 ```text
-Python          3.12.1
-NumPy           2.5.2
-pandas          2.3.3
-SciPy           1.18.0
-scikit-learn    1.9.0
-matplotlib      3.11.1
+01_dataset_inspection.ipynb
+02_filtering_and_sampling.ipynb
+03_labelling_pilot.ipynb
+04_noise_and_preprocessing.ipynb
+05_model_training_evaluation.ipynb
+06_scaled_experiment.ipynb
+07_final_synthesis.ipynb
 ```
 
----
+Partial execution is available for debugging:
 
-## Notebook execution order
-
-Run the notebooks in numerical order.
-
-### 01 — Dataset inspection
-
-```text
-notebooks/01_dataset_inspection.ipynb
+```bash
+python scripts/run_cleanroom.py --start 1 --end 5
+python scripts/run_cleanroom.py --start 6 --end 7
 ```
 
-Inspects streamed LMSYS-Chat-1M examples and validates the conversation structure.
+If starting later than Notebook 01, required intermediate files from earlier notebooks must already exist locally.
 
-### 02 — Filtering and sampling
-
-```text
-notebooks/02_filtering_and_sampling.ipynb
-```
-
-Applies the frozen relevance filter, constructs deterministic candidate pools, and creates the pilot sample.
-
-### 03 — Weak-labelling pilot
+## Key frozen configuration
 
 ```text
-notebooks/03_labelling_pilot.ipynb
-```
-
-Applies weak-labelling rules for:
-
-- sycophantic validation;
-- overconfident judgement;
-- directive advice.
-
-Frozen weak-label version:
-
-```text
-disempowerment_weak_v5
-```
-
-### 04 — Noise and preprocessing
-
-```text
-notebooks/04_noise_and_preprocessing.ipynb
-```
-
-Applies the frozen synthetic noise and preprocessing configurations.
-
-```text
-Noise version:          noise_v1
-Preprocessing version: preprocess_v1
+Random seed:              42
+Weak-label version:       disempowerment_weak_v5
+Noise version:            noise_v1
+Preprocessing version:    preprocess_v1
+Model:                    TF-IDF + LinearSVC
+LinearSVC C:              1.0
+Class weight:             balanced
+Cross-validation:         3-fold source-level StratifiedKFold
 ```
 
 Noise conditions:
@@ -169,186 +277,126 @@ noise_aware
 aggressive
 ```
 
-### 05 — Pilot model training and evaluation
+## Important audit checkpoints
+
+Positive audit:
 
 ```text
-notebooks/05_model_training_evaluation.ipynb
+56 reviewed
+16 supported positives
+40 rejected false positives
 ```
 
-Runs the pilot modelling experiment using TF-IDF word unigrams/bigrams and `LinearSVC` with deterministic 3-fold source-level cross-validation.
-
-The model is trained on clean, unprocessed training text and evaluated across all noise × preprocessing conditions.
-
-### 06 — Scaled experiment
+Negative audit:
 
 ```text
-notebooks/06_scaled_experiment.ipynb
+100 reviewed
+99 confirmed negative
+1 missed positive
 ```
 
-Runs the scaled robustness experiment.
-
-Final scaled experimental target:
+Final target:
 
 ```text
-1,633 sources
-17 positive examples
-1,616 negative examples
-32 noise × preprocessing conditions
-52,256 out-of-fold evaluated rows
+1,633 total sources
+17 positive
+1,616 negative
 ```
 
-The target is an **audit-corrected weak-label target**, not exhaustive human-annotated ground truth.
+## Quick verification without rerunning LMSYS
 
-The scaled experiment includes:
+To inspect the committed result package without rebuilding the dataset pipeline:
 
-- source-level cross-validation;
-- pooled and mean-fold ranking metrics;
-- noise sensitivity analysis;
-- preprocessing sensitivity analysis;
-- positive decision-score analysis;
-- directive linguistic cue-retention analysis.
-
-### 07 — Final synthesis
-
-```text
-notebooks/07_final_synthesis.ipynb
+```bash
+python scripts/verify_reproduction.py --quick
 ```
 
-Consolidates the pilot and scaled experiments without introducing new modelling, labelling, noise, or preprocessing procedures.
+This checks the frozen configuration and committed headline result files.
 
-It contains:
+## Troubleshooting
 
-- pilot-to-scaled comparison;
-- RQ1-RQ3 technical synthesis;
-- final synthesis figure;
-- final artefact integrity checks.
+### `python` is not Python 3.12
 
----
+Check:
 
-## Frozen experimental configuration
-
-```text
-Relevance filtering:    relevance_v1
-Weak labelling:         disempowerment_weak_v5
-Noise generation:       noise_v1
-Preprocessing:          preprocess_v1
-Random seed:            42
-Classifier:             LinearSVC
-Features:               TF-IDF word unigrams + bigrams
-Cross-validation:       3-fold source-level StratifiedKFold
+```bash
+python --version
 ```
 
-These components should not be silently changed when reproducing the final experiment.
+On Windows, `py -3.12` may be the correct launcher. On macOS/Linux, use `python3.12` when creating the environment.
 
----
+### `No module named ...`
 
-## Results
+Activate `.venv`, reinstall the locked environment, then run:
 
-Generated outputs are stored under:
+```bash
+python -m pip check
+```
+
+### Hugging Face authentication or gated-dataset errors
+
+Run:
+
+```bash
+hf auth whoami
+```
+
+Confirm the account has accepted LMSYS-Chat-1M access conditions. Re-run `hf auth login` if necessary.
+
+### A notebook appears frozen
+
+Notebook 06 contains long network and modelling stages. Check CPU/network activity and allow time before interrupting it.
+
+### Re-running after a failed attempt
+
+Generated intermediates are local. For the cleanest restart, use a fresh extracted ZIP or remove generated local data/results that are not part of the submitted repository before starting again. Do not alter the frozen source notebooks or provenance decisions.
+
+### Historical `/workspaces/irp-disempowerment-nlp` paths
+
+You should **not** create a compatibility symlink manually. `scripts/run_cleanroom.py` rewrites that historical path only in the temporary in-memory/executed notebook copies. This is what makes the same ZIP runnable from Windows, macOS, Linux, Codespaces, and GitHub Actions.
+
+## GitHub Codespaces route
+
+Codespaces remains a convenient option but is not required.
+
+Inside a Codespace:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-lock.txt
+hf auth login
+python scripts/run_cleanroom.py
+```
+
+The same runner is used locally and in CI.
+
+## Automated clean-room testing
+
+The `Clean-room reproduction` GitHub Actions workflow runs from the ordinary GitHub Actions checkout directory, not from `/workspaces/irp-disempowerment-nlp` and without a compatibility symlink. It performs the privacy regression check, installs the locked Python 3.12 environment, authenticates to Hugging Face via the configured repository secret, runs notebooks 01–07, and executes the full verifier.
+
+The workflow is read-only with respect to repository contents and does not upload `.cleanroom_runs/` or LMSYS-derived text as artifacts.
+
+## Results to inspect
+
+Completed headline outputs are under:
 
 ```text
 results/tables/
 results/figures/
 ```
 
-The final clean scaled baseline produced:
+Useful files include:
 
 ```text
-Pooled ROC-AUC:             0.8628
-Pooled Average Precision:   0.1233
-Mean-fold ROC-AUC:          0.8729
+results/tables/final_pilot_vs_scaled_comparison.csv
+results/tables/final_research_question_synthesis.csv
+results/figures/final_pilot_vs_scaled_preprocessing_retention.png
 ```
 
-At the default `LinearSVC` decision threshold, the scaled model predicted no positive examples. Hard-threshold precision, recall, and F1 are therefore not used as the primary robustness evidence.
+## Historical Git limitation
 
-Ranking metrics, decision-score sensitivity, and linguistic cue-retention diagnostics provide the main experimental evidence.
+The current branch tip is sanitized for public/ZIP sharing, but files removed from the branch tip can remain recoverable from earlier Git commits, pull-request refs, Actions logs/caches, or repository history until that history and any retained caches are explicitly rewritten/purged. A ZIP exported from the sanitized branch tip contains only the current sanitized tree; publishing the full Git repository/history is a separate privacy decision.
 
-Non-aggressive preprocessing configurations preserved broadly similar ranking performance, whereas aggressive preprocessing caused substantially larger degradation.
-
-For tracked directive constructions, non-aggressive preprocessing retained approximately 97-98% of cue-bearing rows, whereas aggressive preprocessing retained 0%.
-
-These findings should be interpreted in the context of the sparse and highly imbalanced audit-corrected weak-label target.
-
----
-
-## Local data and Git policy
-
-Dataset-derived conversation text and local sample files are intentionally excluded from version control.
-
-Local samples are stored under:
-
-```text
-data/samples/
-```
-
-Do not commit:
-
-- Hugging Face access tokens;
-- `.venv/`;
-- raw LMSYS conversation data;
-- local dataset samples;
-- temporary logs containing conversation text.
-
-Committed result tables contain experimental metrics, identifiers, scores, and diagnostic summaries rather than redistributed raw conversation datasets.
-
----
-
-## Repository structure
-
-```text
-irp-disempowerment-nlp/
-│
-├── notebooks/
-│   ├── 01_dataset_inspection.ipynb
-│   ├── 02_filtering_and_sampling.ipynb
-│   ├── 03_labelling_pilot.ipynb
-│   ├── 04_noise_and_preprocessing.ipynb
-│   ├── 05_model_training_evaluation.ipynb
-│   ├── 06_scaled_experiment.ipynb
-│   └── 07_final_synthesis.ipynb
-│
-├── src/
-│   ├── filtering.py
-│   ├── labelling.py
-│   ├── noise.py
-│   ├── preprocessing.py
-│   └── modelling.py
-│
-├── results/
-│   ├── figures/
-│   └── tables/
-│
-├── data/
-│   └── samples/
-│
-├── requirements.txt
-├── requirements-lock.txt
-└── README.md
-```
-
----
-
-## Reproducibility
-
-For reproduction:
-
-1. install `requirements-lock.txt`;
-2. authenticate with Hugging Face;
-3. use the pinned LMSYS dataset revision;
-4. execute notebooks in numerical order;
-5. preserve the frozen experimental components;
-6. preserve random seed `42` and the source-level cross-validation procedure.
-
-Some dataset-derived intermediate files are intentionally not committed and must be regenerated by the preceding notebooks.
-
----
-
-## Scope and limitations
-
-The artefact evaluates the robustness of a baseline NLP classifier under controlled preprocessing and synthetic noise conditions.
-
-Weak labels are heuristic linguistic indicators and should not be interpreted as definitive evidence that a conversation is harmful or disempowering.
-
-The final scaled target is highly imbalanced and contains few positive examples. Category-specific evidence is particularly sparse for sycophantic validation and overconfident judgement. The strongest linguistic cue-retention evidence therefore concerns directive advice.
-
-The purpose of the artefact is to evaluate how data-processing choices affect classifier behaviour, rather than to deploy a production disempowerment-detection system.
+Do not merge this branch to `main` until the final sharing decision is made.

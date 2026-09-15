@@ -21,3 +21,6 @@ data/samples/*
 # Local experiment logs can contain machine-specific metadata.
 logs/*
 !logs/.gitkeep
+
+# Executed clean-room notebook copies are local-only and may contain dataset text.
+.cleanroom_runs/
