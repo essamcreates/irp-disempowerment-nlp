@@ -2,8 +2,12 @@
 """Fail fast if public-sharing privacy invariants are violated.
 
 This check is intentionally independent of the experiment. It only inspects the
-tracked repository state and provenance CSV schemas; it does not alter labels,
+shareable project tree and provenance CSV schemas; it does not alter labels,
 methodology, source experimental logic, or reported results.
+
+When the project is a Git checkout, tracked files are inspected with ``git
+ls-files``. When the project is an exported/downloaded ZIP with no Git metadata
+(or Git is unavailable), the extracted filesystem tree is inspected instead.
 """
 
 from __future__ import annotations
@@ -48,15 +52,38 @@ EXPECTED_PROVENANCE_FILES = {
 }
 
 
-def tracked_paths() -> list[str]:
-    result = subprocess.run(
-        ["git", "ls-files"],
-        cwd=ROOT,
-        check=True,
-        text=True,
-        capture_output=True,
-    )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+def shareable_paths() -> tuple[list[str], str]:
+    """Return project paths using Git when available, otherwise the ZIP tree."""
+    git_dir = ROOT / ".git"
+    if git_dir.exists():
+        try:
+            result = subprocess.run(
+                ["git", "ls-files"],
+                cwd=ROOT,
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            paths = [
+                line.strip()
+                for line in result.stdout.splitlines()
+                if line.strip()
+            ]
+            return paths, "tracked Git files"
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            # A reviewer may have a Git checkout but no Git executable available.
+            # Fall back to the actual shareable filesystem tree.
+            pass
+
+    paths = [
+        path.relative_to(ROOT).as_posix()
+        for path in ROOT.rglob("*")
+        if path.is_file()
+        and ".venv" not in path.parts
+        and ".cleanroom_runs" not in path.parts
+        and "__pycache__" not in path.parts
+    ]
+    return sorted(paths), "extracted ZIP/project files"
 
 
 def fail(message: str) -> None:
@@ -64,20 +91,25 @@ def fail(message: str) -> None:
 
 
 def check_samples(paths: list[str]) -> None:
-    tracked_samples = [p for p in paths if p.startswith("data/samples/")]
-    unexpected = [p for p in tracked_samples if p != "data/samples/.gitkeep"]
+    samples = [p for p in paths if p.startswith("data/samples/")]
+    unexpected = [p for p in samples if p != "data/samples/.gitkeep"]
     if unexpected:
-        fail("tracked data/samples files are not allowed: " + ", ".join(unexpected))
+        fail("data/samples files are not allowed: " + ", ".join(unexpected))
 
 
 def check_provenance(paths: list[str]) -> None:
-    tracked_provenance = {
-        Path(p).name for p in paths if p.startswith("provenance/") and p.endswith(".csv")
+    provenance_files = {
+        Path(p).name
+        for p in paths
+        if p.startswith("provenance/") and p.endswith(".csv")
     }
-    missing = EXPECTED_PROVENANCE_FILES - tracked_provenance
-    extra = tracked_provenance - EXPECTED_PROVENANCE_FILES
+    missing = EXPECTED_PROVENANCE_FILES - provenance_files
+    extra = provenance_files - EXPECTED_PROVENANCE_FILES
     if missing:
-        fail("missing expected decision-only provenance files: " + ", ".join(sorted(missing)))
+        fail(
+            "missing expected decision-only provenance files: "
+            + ", ".join(sorted(missing))
+        )
     if extra:
         fail("unexpected provenance CSVs present: " + ", ".join(sorted(extra)))
 
@@ -99,17 +131,26 @@ def check_provenance(paths: list[str]) -> None:
             if any(fragment in column for fragment in FORBIDDEN_COLUMN_FRAGMENTS)
         ]
         if forbidden:
-            fail(f"{name} contains forbidden text/evidence/note columns: {forbidden}")
+            fail(
+                f"{name} contains forbidden text/evidence/note columns: {forbidden}"
+            )
 
-        unknown = [column for column in normalized if column not in ALLOWED_PROVENANCE_COLUMNS]
+        unknown = [
+            column
+            for column in normalized
+            if column not in ALLOWED_PROVENANCE_COLUMNS
+        ]
         if unknown:
-            fail(f"{name} contains non identifier/category/decision columns: {unknown}")
+            fail(
+                f"{name} contains non identifier/category/decision columns: {unknown}"
+            )
 
 
 if __name__ == "__main__":
-    paths = tracked_paths()
+    paths, mode = shareable_paths()
     check_samples(paths)
     check_provenance(paths)
     print("PUBLIC-SHARING PRIVACY CHECK PASSED")
-    print("Tracked data/samples contains only .gitkeep.")
+    print("Inspection mode:", mode)
+    print("data/samples contains only .gitkeep in the shareable tree.")
     print("Provenance CSVs contain only identifier/category/decision columns.")
